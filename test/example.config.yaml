@@ -1,0 +1,9 @@
+database:
+  url: 127.0.0.1:3306
+  user: root
+  password:
+  name: scrub_test
+  protocol: tcp
+  timeZone: UTC
+  useDocker: false
+
