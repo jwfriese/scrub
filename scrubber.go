@@ -26,26 +26,48 @@ func (s *scrubber) Scrub(c Config) error {
 	}
 
 	for _, selector := range c.Selectors {
-		if selector.Wheres == "" {
-			if err = doScrubWithoutWheres(tx, selector, c.Method); err != nil {
-				rollbackErr := tx.Rollback()
-				if rollbackErr != nil {
-					return rollbackErr
-				}
-				return err
+		if err = doScrub(tx, selector, c.Method); err != nil {
+			rollbackErr := tx.Rollback()
+			if rollbackErr != nil {
+				return rollbackErr
 			}
-		} else {
-			if err = doScrubWithWheres(tx, selector, c.Method); err != nil {
-				rollbackErr := tx.Rollback()
-				if rollbackErr != nil {
-					return rollbackErr
-				}
-				return err
-			}
+			return err
 		}
 	}
 
 	return tx.Commit()
+}
+
+func doScrub(
+	db *sql.Tx,
+	selector Selector,
+	method Method,
+) error {
+	query := "UPDATE"
+	var fmts []interface{}
+	if selector.Database == "" {
+		query += " %s"
+		fmts = append(fmts, selector.Table)
+	} else {
+		query += " %s.%s"
+		fmts = append(fmts, selector.Database)
+		fmts = append(fmts, selector.Table)
+	}
+	query += " SET %s = ?"
+	fmts = append(fmts, selector.Column)
+	if selector.Wheres != "" {
+		query += " WHERE %s"
+		fmts = append(fmts, selector.Wheres)
+	}
+
+	query = fmt.Sprintf(query, fmts...)
+
+	value, err := method.Execute()
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec(query, value)
+	return err
 }
 
 func doScrubWithWheres(

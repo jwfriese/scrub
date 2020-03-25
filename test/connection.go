@@ -25,26 +25,25 @@ type connectionConfig struct {
 	UseDocker bool           `yaml:"useDocker"`
 }
 
-func (config *connectionConfig) connectionUrl() string {
-	return fmt.Sprintf(
-		"%s:%s@%s(%s)/%s?parseTime=true&multiStatements=true&charset=utf8mb4&loc=%s",
-		config.Database.User,
-		config.Database.Password,
-		config.Database.Protocol,
-		config.Database.Url,
-		config.Database.Name,
-		config.Database.TimeZone,
-	)
-}
+func (config *connectionConfig) connectionUrl(connectDirectlyToDatabase bool) string {
+	if connectDirectlyToDatabase {
+		return fmt.Sprintf(
+			"%s:%s@%s(%s)/%s?parseTime=true&multiStatements=true&charset=utf8mb4&loc=%s",
+			config.Database.User,
+			config.Database.Password,
+			config.Database.Protocol,
+			config.Database.Url,
+			config.Database.Name,
+			config.Database.TimeZone,
+		)
+	}
 
-func (config *connectionConfig) mySQLConnectionUrl() string {
 	return fmt.Sprintf(
-		"%s:%s@%s(%s)/%s?parseTime=true&multiStatements=true&charset=utf8mb4&loc=%s",
+		"%s:%s@%s(%s)/?parseTime=true&multiStatements=true&charset=utf8mb4&loc=%s",
 		config.Database.User,
 		config.Database.Password,
 		config.Database.Protocol,
 		config.Database.Url,
-		config.Database.Name,
 		config.Database.TimeZone,
 	)
 }

@@ -60,7 +60,7 @@ func setupDockerDBs(t func(v ...interface{}), seedFilePath string) (*sql.DB, fun
 		}
 
 		runSeed(seedFilePath, localDBConfig)
-		db, err := sql.Open("mysql", localDBConfig.connectionUrl())
+		db, err := sql.Open("mysql", localDBConfig.connectionUrl(true))
 		if err != nil {
 			log.Fatalf("Could not open database connection: %v", err)
 		}

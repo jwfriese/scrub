@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"runtime/debug"
 	"sync"
 )
 
@@ -19,11 +18,8 @@ func CleanUpDocker() {
 	}
 }
 
-func CreateDB(seedFile string) *sql.DB {
-	if testDatabase != nil {
-		return testDatabase
-	}
-
+func CreateDB(seedFile string, connectDirectlyToDatabase bool) *sql.DB {
+	var testDatabase *sql.DB
 	connectionConfig, err := loadConnectionConfig()
 	if err != nil {
 		log.Fatalf("failed to load test db config: %v", err)
@@ -38,54 +34,58 @@ func CreateDB(seedFile string) *sql.DB {
 		return db
 	}
 
-	testDatabase = initializeTestDatabase(connectionConfig)
-	if testDatabase == nil {
-		log.Fatalf("could not initialize a test database")
-	}
+	if connectDirectlyToDatabase {
+		testDatabase = initializeTestDatabase(connectionConfig, true)
+		if testDatabase == nil {
+			log.Fatalf("could not initialize a test database")
+		}
 
-	err = applySeed(testDatabase, seedFile)
-	if err != nil {
-		log.Fatalf("could not seed the test database: %v", err)
+		err = applySeed(testDatabase, seedFile)
+		if err != nil {
+			log.Fatalf("could not seed the test database: %v", err)
+		}
+	} else {
+		testDatabase = initializeTestDatabase(connectionConfig, true)
+		if testDatabase == nil {
+			log.Fatalf("could not initialize a test database")
+		}
+
+		err = applySeed(testDatabase, seedFile)
+		if err != nil {
+			log.Fatalf("could not seed the test database: %v", err)
+		}
+
+		err = testDatabase.Close()
+		if err != nil {
+			log.Fatalf("could not close the database connection used to seed that DB: %v", err)
+		}
+
+		testDatabase = initializeTestDatabase(connectionConfig, false)
+		if testDatabase == nil {
+			log.Fatalf("could not initialize a test database")
+		}
 	}
 
 	return testDatabase
 }
 
-var (
-	testDatabase *sql.DB
-	dockerLock   sync.Mutex
-)
+var dockerLock sync.Mutex
 
 const DefaultConfigFilepath = "test/config.yaml"
 
-func initializeTestDatabase(config *connectionConfig) *sql.DB {
+func initializeTestDatabase(config *connectionConfig, connectDirectlyToDatabase bool) *sql.DB {
 	if _, ok := os.LookupEnv("SHOW_TEST_LOGS"); !ok {
 		log.SetOutput(createTestLogPipe())
-	}
-
-	if config.UseDocker {
-		return testDatabase
 	}
 
 	var (
 		db  *sql.DB
 		err error
 	)
-	db, err = sql.Open("mysql", config.connectionUrl())
-	if err != nil {
-		db, err = sql.Open("mysql", config.mySQLConnectionUrl())
-		if err != nil {
-			debug.PrintStack()
-			log.Fatalf("Could not connect to mysql: %v", err)
-		}
-
-		log.Println("[test] creating database")
-		_, err = db.Exec(fmt.Sprintf(`CREATE DATABASE IF NOT EXISTS %s`, config.Database.Name))
-	}
-
+	db, err = sql.Open("mysql", config.connectionUrl(connectDirectlyToDatabase))
 	if err != nil {
 		log.Println(err)
-		log.Fatalf("Could not create test database: %v", err)
+		log.Fatalf("could not connect to mysql: %v", err)
 	}
 
 	db.SetMaxOpenConns(30)
